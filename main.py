@@ -1,5 +1,6 @@
 import os
 import telebot
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 import requests
 from bs4 import BeautifulSoup
 from supabase import create_client, Client
@@ -12,13 +13,14 @@ SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 bot = telebot.TeleBot(TOKEN)
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# --- ЛОГИКА ПАРСИНГА (принимает логин и пароль) ---
-def get_grades(login, password):
+# --- БАЗОВЫЕ ФУНКЦИИ ДЛЯ РАБОТЫ С ДНЕВНИКОМ ---
+
+def login_to_urtk(login, password):
+    """Авторизуется и возвращает объект session, либо None при ошибке."""
     session = requests.Session()
-    session.headers.update({'User-Agent': 'Mozilla/5.0'})
+    session.headers.update({'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
     
     try:
-        # Авторизация
         res = session.get("https://auth.mephi.ru/login?service=https://marks-urtk.mephi.ru/")
         soup = BeautifulSoup(res.text, 'html.parser')
         token = soup.find('input', {'name': 'authenticity_token'})['value']
@@ -29,18 +31,51 @@ def get_grades(login, password):
             "service": "https://marks-urtk.mephi.ru/",
             "username": login, "password": password, "commit": "Войти"
         }
-        post_res = session.post("https://auth.mephi.ru/login", data=payload)
+        session.post("https://auth.mephi.ru/login", data=payload)
         
-        # Проверка, правильный ли пароль
-        if "Электронный дневник" not in session.get("https://marks-urtk.mephi.ru/student/schedule").text:
-            return "❌ Неверный логин или пароль от дневника."
-            
+        # Проверка успешного входа
+        check = session.get("https://marks-urtk.mephi.ru/student/schedule")
+        if "Электронный дневник" in check.text:
+            return session
+        return None
     except Exception as e:
-        return f"❌ Ошибка авторизации: {e}"
+        print(f"Login error: {e}")
+        return None
 
-    # Парсинг (для примера берем предмет 532)
-    url = "https://marks-urtk.mephi.ru/student/disciplines/532/visits"
-    res = session.get(url)
+def get_terms(session):
+    """Парсит доступные семестры из выпадающего списка."""
+    res = session.get("https://marks-urtk.mephi.ru/student/schedule")
+    soup = BeautifulSoup(res.text, 'html.parser')
+    
+    terms = []
+    # Ищем элементы выпадающего списка семестров
+    for li in soup.find_all('li', attrs={'data-action': 'click->dropdown#select_term'}):
+        term_id = li.get('data-value')
+        term_name = li.text.strip()
+        terms.append({'id': term_id, 'name': term_name})
+    return terms
+
+def get_disciplines(session, term_id):
+    """Получает список предметов для выбранного семестра."""
+    res = session.get(f"https://marks-urtk.mephi.ru/student/disciplines?term_id={term_id}")
+    soup = BeautifulSoup(res.text, 'html.parser')
+    
+    disciplines = []
+    for div in soup.find_all('div', class_='discipline__container'):
+        title_div = div.find('div', class_='subtitle')
+        link_a = div.find('a', class_='link')
+        
+        if title_div and link_a:
+            name = title_div.text.strip()
+            # Из ссылки /student/disciplines/532/visits достаем ID (532)
+            href = link_a['href']
+            disc_id = href.split('/')[3]
+            disciplines.append({'id': disc_id, 'name': name})
+    return disciplines
+
+def get_grades(session, disc_id):
+    """Парсит оценки по выбранному предмету."""
+    res = session.get(f"https://marks-urtk.mephi.ru/student/disciplines/{disc_id}/visits")
     soup = BeautifulSoup(res.text, 'html.parser')
     
     title_span = soup.find('span', class_='text-bold')
@@ -56,9 +91,14 @@ def get_grades(login, password):
             grades.append(cell.text.strip())
 
     msg = f"📚 <b>{subject_name}</b>\n\n"
+    has_grades = False
     for d, g in zip(dates, grades):
         if g:
             msg += f"✅ {d} — <b>{g}</b>\n"
+            has_grades = True
+            
+    if not has_grades:
+        msg += "Оценок пока нет."
     return msg
 
 # --- КОМАНДЫ БОТА ---
@@ -85,14 +125,19 @@ def process_password(message, login):
     password = message.text.strip()
     tg_id = message.from_user.id
     
-    # Сохраняем в базу
+    # Удаляем сообщение с паролем ради безопасности
+    try:
+        bot.delete_message(message.chat.id, message.message_id)
+    except:
+        pass
+    
     try:
         supabase.table('users').upsert({
             "telegram_id": tg_id, 
             "urtk_login": login, 
             "urtk_password": password
         }).execute()
-        bot.send_message(message.chat.id, "Аккаунт привязан! Теперь напиши /marks")
+        bot.send_message(message.chat.id, "✅ Аккаунт привязан! Теперь напиши /marks")
     except Exception as e:
         bot.send_message(message.chat.id, f"Ошибка сохранения: {e}")
 
@@ -100,24 +145,97 @@ def process_password(message, login):
 def marks(message):
     tg_id = message.from_user.id
     
-    # Достаем данные из базы
+    # Достаем данные из БД
     try:
         response = supabase.table('users').select('*').eq('telegram_id', tg_id).execute()
         if not response.data:
             bot.send_message(message.chat.id, "Сначала привяжи аккаунт через /login")
             return
-            
         user_data = response.data[0]
-        login = user_data['urtk_login']
-        password = user_data['urtk_password']
-        
+        login, password = user_data['urtk_login'], user_data['urtk_password']
     except Exception as e:
         bot.send_message(message.chat.id, f"Ошибка БД: {e}")
         return
 
-    bot.send_message(message.chat.id, "Загружаю оценки...")
-    result = get_grades(login, password)
-    bot.send_message(message.chat.id, result, parse_mode='HTML')
+    msg = bot.send_message(message.chat.id, "⏳ Загружаю семестры...")
+    session = login_to_urtk(login, password)
+    
+    if not session:
+        bot.edit_message_text("❌ Ошибка входа. Возможно, пароль изменился. Попробуй /login заново.", message.chat.id, msg.message_id)
+        return
+        
+    terms = get_terms(session)
+    if not terms:
+        bot.edit_message_text("Не удалось найти семестры.", message.chat.id, msg.message_id)
+        return
+
+    # Создаем кнопки семестров
+    markup = InlineKeyboardMarkup()
+    for term in terms:
+        markup.add(InlineKeyboardButton(text=term['name'], callback_data=f"term_{term['id']}"))
+
+    bot.edit_message_text("Выбери семестр:", message.chat.id, msg.message_id, reply_markup=markup)
+
+# --- ОБРАБОТКА НАЖАТИЙ НА КНОПКИ ---
+
+@bot.callback_query_handler(func=lambda call: True)
+def callback_query(call):
+    tg_id = call.from_user.id
+    
+    # Получаем логин/пароль
+    try:
+        response = supabase.table('users').select('*').eq('telegram_id', tg_id).execute()
+        user_data = response.data[0]
+        login, password = user_data['urtk_login'], user_data['urtk_password']
+    except Exception:
+        bot.answer_callback_query(call.id, "Ошибка данных. Напиши /login")
+        return
+
+    # 1. Пользователь выбрал семестр
+    if call.data.startswith('term_'):
+        term_id = call.data.split('_')[1]
+        bot.edit_message_text("⏳ Загружаю предметы...", call.message.chat.id, call.message.message_id)
+        
+        session = login_to_urtk(login, password)
+        disciplines = get_disciplines(session, term_id)
+        
+        markup = InlineKeyboardMarkup()
+        # Группируем по 1 кнопке в ряд (названия длинные)
+        for d in disciplines:
+            # Обрезаем слишком длинные названия для кнопки
+            btn_text = d['name'] if len(d['name']) < 40 else d['name'][:37] + "..."
+            markup.add(InlineKeyboardButton(text=btn_text, callback_data=f"disc_{d['id']}"))
+            
+        markup.add(InlineKeyboardButton(text="⬅️ Назад к семестрам", callback_data="back_terms"))
+        bot.edit_message_text("Выбери предмет:", call.message.chat.id, call.message.message_id, reply_markup=markup)
+
+    # 2. Пользователь выбрал предмет
+    elif call.data.startswith('disc_'):
+        disc_id = call.data.split('_')[1]
+        bot.edit_message_text("⏳ Загружаю оценки...", call.message.chat.id, call.message.message_id)
+        
+        session = login_to_urtk(login, password)
+        grades_text = get_grades(session, disc_id)
+        
+        markup = InlineKeyboardMarkup()
+        markup.add(InlineKeyboardButton(text="⬅️ Назад к предметам", callback_data="back_terms"))
+        
+        bot.edit_message_text(grades_text, call.message.chat.id, call.message.message_id, parse_mode='HTML', reply_markup=markup)
+
+    # 3. Кнопка "Назад"
+    elif call.data == "back_terms":
+        # Перерисовываем сообщение обратно в меню семестров
+        bot.edit_message_text("⏳ Загружаю...", call.message.chat.id, call.message.message_id)
+        session = login_to_urtk(login, password)
+        terms = get_terms(session)
+        
+        markup = InlineKeyboardMarkup()
+        for term in terms:
+            markup.add(InlineKeyboardButton(text=term['name'], callback_data=f"term_{term['id']}"))
+            
+        bot.edit_message_text("Выбери семестр:", call.message.chat.id, call.message.message_id, reply_markup=markup)
+
+    bot.answer_callback_query(call.id)
 
 if __name__ == "__main__":
     print("Бот запущен...")
