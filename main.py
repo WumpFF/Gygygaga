@@ -27,7 +27,7 @@ def run_flask():
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
 
-# --- СЛОВАРЬ СОКРАЩЕНИЙ (укоротил для читаемости, он тот же) ---
+# --- СЛОВАРЬ СОКРАЩЕНИЙ ---
 ABBR_MAP = {
     "архитектура аппаратных средств": "ААС", "безопасность жизнедеятельности": "БЖД", "внедрение и поддержка компьютерных систем": "ВиПКС", "графический дизайн и мультимедиа": "ГДиМ", "дискретная математика с элементами математической логики": "ДМЭМЛ", "инструментальные средства разработки программного обеспечения": "ИСРПО", "информационные технологии": "ИТ", "иностранный язык в профессиональной деятельности": "ИЯПД", "компьютерные сети": "КС", "математическое моделирование": "ММ", "основы алгоритмизации и программирования": "ОАиП", "основы бережливого производства": "ОБП", "обеспечение качества функционирования компьютерных систем": "ОКФКС", "основы проектирования баз данных": "ОПБД", "операционные системы и среды": "ОСиС", "основы философии": "ОснФилософ", "основы web-технологий": "ОТ", "проектирование и разработка веб-приложений": "ПиРП", "правовое обеспечение профессиональной деятельности": "ПОПД", "прикладное программирование": "ПП", "психология общения": "ПсихОбщения", "разработка мобильных приложений": "РМП", "разработка программных модулей": "РПМ", "системное программирование": "СП", "стандартизация, сертификация и техническое документоведение": "ССиТД", "теория вероятностей и математическая статистика": "ТВиМС", "технология разработки и защиты баз данных": "ТРиЗБД", "технология разработки программного обеспечения": "ТРПО", "учебная практика": "УП", "физическая культура": "ФизКультура", "численные методы": "ЧМ", "элементы высшей математики": "ЭВМ", "экономика отрасли": "ЭконОтрасли", "иностранный язык": "ИнЯзык", "основы безопасности и защиты родины": "ОБиЗР", "основы управления персоналом производственного подразделения": "ОУППП", "релейная защита электрооборудования электрических станций, сетей и систем": "РЗСиС", "техническая диагностика и ремонт электрооборудования": "ТДиРЭ", "техническая эксплуатация электрооборудования электрических станций, сетей и систем": "ТЭСиС", "автоматизированные системы управления в электроэнергетических системах": "АСУЭС", "инженерная графика": "ИнжГраф", "измерительная техника": "ИТ", "материаловедение": "Материаловед", "математические методы решения прикладных профессиональных задач": "ММРППЗ", "метрология, стандартизация и сертификация": "МСиС", "наладка электрооборудования подстанций электрических сетей": "НЭЭС", "общая энергетика": "ОбщЭнергет", "основы применения искусственного интеллекта и нейронных сетей в профессиональной деятельности": "ОПИИ", "основы релейной защиты и автоматики": "ОРЗиА", "основы экономики": "ОснЭконом", "основы финансовой грамотности": "ОФГ", "прикладные компьютерные программы в профессиональной деятельности": "ПКППД", "техническая механика": "ТехМех", "техническое обслуживание электрооборудования подстанций электрических сетей": "ТОЭПЭС", "электротехника и электроника": "ЭиЭ", "эксплуатация электротехнического оборудования и трансформаторов": "ЭЭОиТ", "атомные электростанции": "АЭС", "информационные технологии в профессиональной деятельности": "ИТПД", "контроль и защита теплоэнергетического оборудования и технических систем атомных электростанций": "КиЗТОиТСАЭ", "обеспечение безопасности атомных станций": "ОБАС", "основы обеспечения безопасного ведения и контроля технологических процессов хранения отработанного ядерного топлива": "ОБВиКТПХОЯТ", "основы эксплуатации теплоэнергетического оборудования и технических систем атомных электростанций": "ОЭТОиТСАЭ", "основы технического обслуживания основного и вспомогательного теплоэнергетического оборудования и систем атомных электростанций": "ТООиВТОиСАЭ", "управление персоналом": "УпрПерсонал", "электрические и гидравлические машины": "ЭиГМ", "экологические основы природопользования": "ЭОП", "ядерные установки атомных станций": "ЯУАС", "моделирование технологических процессов": "МТП", "организация работ по устранению неполадок и отказов автоматизированного оборудования": "ОРУНиОАО", "осуществление текущего мониторинга состояния систем автоматизации": "ОТМССА", "программирование чпу для автоматизированного оборудования": "ПАО", "разработка, организация и контроль качества работ по монтажу, наладке и техническому обслуживанию систем и средств автоматизации": "РОиККРМНиТОС", "экономика организации": "ЭконОрганиз", "автоматизация проектирования технологических процессов": "АПТП", "атомные электрические станции и их технологическое оборудование": "АЭСиТО", "выполнение работ по настройке и конфигурированию программируемых логических контроллеров": "ВРНиКПЛК", "гидравлические и пневматические системы": "ГиПС", "информационные и цифровые технологии в профессиональной деятельности, с применением нейронных сетей и искусственного интеллекта": "ИЦТПД НСиИИ", "математические методы моделирования производственных процессов": "МММПП", "осуществление анализа структуры технологического процесса и характеристик его элементов для разработки маршрутного технологического процесса на робототехнологическом комплексе": "ОАСТП", "осуществление комплекса пусконаладочных работ и технического обслуживания робототехнологических комплексов с формированием пакета технической документации": "ОКПРиТО", "организация работ по монтажу и наладке средства автоматизации и механизации, текущему мониторингу состояния системы": "ОРМНСА", "охрана труда и бережливое производство": "ОТиБП", "основы ядерной физики и дозиметрических измерений": "ОЯФиДИ", "планирование материально-технического обеспечения эксплуатации робототехнических комплексов": "ПМТОЭРК", "проектирование приспособлений и технологической оснастки": "ППиТО", "программирование систем с числовым программным управлением": "ПСЧПС", "процессы формообразования и инструменты": "ПФиИ", "разработка и тестирование модели системы автоматизации и механизации с формированием пакета технической документации": "РТСА", "технологическое оборудование и приспособления": "ТОиП", "классный час": "Кл. час"
 }
@@ -46,65 +46,53 @@ def get_abbr(name):
 
 # --- БАЗОВЫЕ ФУНКЦИИ ---
 
-# Имитируем реальный браузер (это может помочь обойти блокировку)
-HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-    'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
-    'Connection': 'keep-alive',
-    'Upgrade-Insecure-Requests': '1'
-}
-
-def login_to_urtk(login, password):
+def login_and_get_term(login, password):
     session = requests.Session()
-    session.headers.update(HEADERS)
+    session.headers.update({'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
     try:
-        # Увеличили таймаут до 40 секунд
-        res = session.get("https://auth.mephi.ru/login?service=https://marks-urtk.mephi.ru/", timeout=40)
+        # 1. Получаем токен
+        res = session.get("https://auth.mephi.ru/login?service=https://marks-urtk.mephi.ru/", timeout=15)
         soup = BeautifulSoup(res.text, 'html.parser')
         token = soup.find('input', {'name': 'authenticity_token'})['value']
         lt = soup.find('input', {'name': 'lt'})['value']
         
+        # 2. Авторизуемся
         payload = {
             "utf8": "✓", "authenticity_token": token, "lt": lt,
             "service": "https://marks-urtk.mephi.ru/",
             "username": login, "password": password, "commit": "Войти"
         }
-        session.post("https://auth.mephi.ru/login", data=payload, timeout=40)
+        session.post("https://auth.mephi.ru/login", data=payload, timeout=15)
         
-        check = session.get("https://marks-urtk.mephi.ru/student/schedule", timeout=40)
+        # 3. Загружаем главную страницу и ищем семестр (всё в одном запросе!)
+        check = session.get("https://marks-urtk.mephi.ru/student/schedule", timeout=15)
         check.encoding = 'utf-8'
         
         if "Электронный дневник" in check.text:
-            return session
-        return None
+            soup_sched = BeautifulSoup(check.text, 'html.parser')
+            
+            term_id = "5" # По умолчанию
+            selected_span = soup_sched.find('span', class_='custom-select__selected')
+            
+            if selected_span:
+                selected_text = selected_span.text.strip()
+                # Ищем точное совпадение в выпадающем списке
+                for li in soup_sched.find_all('li'):
+                    if 'term' in str(li.get('data-action', '')) and li.text.strip() == selected_text:
+                        term_id = li.get('data-value', '5')
+                        break
+            
+            return session, term_id
+        return None, None
     except Exception as e:
         print(f"Login error: {e}")
-        return None
-
-def get_current_term_id(session):
-    try:
-        res = session.get("https://marks-urtk.mephi.ru/student/schedule", timeout=40)
-        res.encoding = 'utf-8'
-        soup = BeautifulSoup(res.text, 'html.parser')
-        selected_span = soup.find('span', class_='custom-select__selected')
-        if selected_span:
-            selected_text = selected_span.text.strip()
-            for li in soup.find_all('li', attrs={'data-action': 'click->dropdown#select_term'}):
-                if li.text.strip() == selected_text:
-                    return li.get('data-value', '5')
-        first_li = soup.find('li', attrs={'data-action': 'click->dropdown#select_term'})
-        return first_li.get('data-value', '5') if first_li else "5"
-    except:
-        return "5"
+        return None, None
 
 def get_disciplines(session, term_id):
     try:
         url = f"https://marks-urtk.mephi.ru/student/disciplines?term_id={term_id}"
-        # Добавили Referer, как будто мы перешли по ссылке с сайта
-        headers = {'Referer': 'https://marks-urtk.mephi.ru/student/schedule'}
-        
-        res = session.get(url, timeout=40, headers=headers)
+        # Убрали лишние заголовки, оставили только базовые
+        res = session.get(url, timeout=15)
         res.encoding = 'utf-8'
         
         if "Электронный дневник" not in res.text:
@@ -127,17 +115,17 @@ def get_disciplines(session, term_id):
                     continue
         
         if not disciplines:
-            return [], f"В HTML не найдены предметы (найдено {len(containers)} контейнеров)."
+            return [], f"В HTML не найдены предметы (контейнеров: {len(containers)})."
             
         return disciplines, None
     except requests.exceptions.Timeout:
-        return None, "Сайт дневника не отвечает (Таймаут 40 сек)."
+        return None, "Таймаут при запросе предметов."
     except Exception as e:
         return None, f"Ошибка сети: {e}"
 
 def get_grades(session, disc_id):
     try:
-        res = session.get(f"https://marks-urtk.mephi.ru/student/disciplines/{disc_id}/visits", timeout=40)
+        res = session.get(f"https://marks-urtk.mephi.ru/student/disciplines/{disc_id}/visits", timeout=15)
         res.encoding = 'utf-8'
         soup = BeautifulSoup(res.text, 'html.parser')
         
@@ -226,12 +214,13 @@ def marks(message):
     msg = bot.send_message(message.chat.id, "⏳ Загружаю список предметов...")
     
     try:
-        session = login_to_urtk(login, password)
+        # Получаем и сессию, и ID семестра за один раз
+        session, term_id = login_and_get_term(login, password)
+        
         if not session:
-            bot.edit_message_text("❌ Ошибка входа. Возможно, пароль изменился или сайт недоступен. Авторизуйтесь заново через /login.", message.chat.id, msg.message_id)
+            bot.edit_message_text("❌ Ошибка входа. Сайт недоступен или пароль изменился. Попробуйте /login заново.", message.chat.id, msg.message_id)
             return
             
-        term_id = get_current_term_id(session)
         disciplines, err = get_disciplines(session, term_id)
         
         if err:
@@ -270,7 +259,11 @@ def callback_query(call):
         bot.edit_message_text("⏳ Загружаю оценки...", call.message.chat.id, call.message.message_id)
         
         try:
-            session = login_to_urtk(login, password)
+            session, _ = login_and_get_term(login, password)
+            if not session:
+                bot.edit_message_text("❌ Сессия истекла. Авторизуйтесь заново /login.", call.message.chat.id, call.message.message_id)
+                return
+                
             grades_text = get_grades(session, disc_id)
             
             markup = InlineKeyboardMarkup()
@@ -284,8 +277,11 @@ def callback_query(call):
         bot.edit_message_text("⏳ Загружаю...", call.message.chat.id, call.message.message_id)
         
         try:
-            session = login_to_urtk(login, password)
-            term_id = get_current_term_id(session)
+            session, term_id = login_and_get_term(login, password)
+            if not session:
+                bot.edit_message_text("❌ Сессия истекла. Авторизуйтесь заново /login.", call.message.chat.id, call.message.message_id)
+                return
+
             disciplines, err = get_disciplines(session, term_id)
             
             if err:
