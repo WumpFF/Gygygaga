@@ -1,9 +1,12 @@
 import os
+import threading
+import time
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 import requests
 from bs4 import BeautifulSoup
 from supabase import create_client, Client
+from flask import Flask
 
 # --- НАСТРОЙКИ ---
 TOKEN = os.environ.get("TELEGRAM_TOKEN")
@@ -12,6 +15,17 @@ SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 
 bot = telebot.TeleBot(TOKEN)
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# --- ЗАГЛУШКА ДЛЯ RENDER (чтобы он видел открытый порт) ---
+app = Flask(__name__)
+
+@app.route('/')
+def health_check():
+    return "Bot is running", 200
+
+def run_flask():
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port)
 
 # --- СЛОВАРЬ СОКРАЩЕНИЙ (согласно вашему PDF) ---
 ABBR_MAP = {
@@ -60,7 +74,7 @@ def get_abbr(name):
             
     return name[:30] + "..." if len(name) > 30 else name
 
-# --- БАЗОВЫЕ ФУНКЦИИ ---
+# --- БАЗОВЫЕ ФУНКЦИИ ДЛЯ РАБОТЫ С ДНЕВНИКОМ ---
 
 def login_to_urtk(login, password):
     session = requests.Session()
@@ -78,11 +92,13 @@ def login_to_urtk(login, password):
         }
         session.post("https://auth.mephi.ru/login", data=payload)
         
+        # Проверка, что авторизация прошла
         check = session.get("https://marks-urtk.mephi.ru/student/schedule")
         if "Электронный дневник" in check.text:
             return session
         return None
-    except:
+    except Exception as e:
+        print(f"Login error: {e}")
         return None
 
 def get_current_term_id(session):
@@ -101,6 +117,7 @@ def get_current_term_id(session):
     return first_li.get('data-value') if first_li else "5"
 
 def get_disciplines(session, term_id):
+    """Получает список предметов для выбранного семестра."""
     res = session.get(f"https://marks-urtk.mephi.ru/student/disciplines?term_id={term_id}")
     soup = BeautifulSoup(res.text, 'html.parser')
     
@@ -116,6 +133,7 @@ def get_disciplines(session, term_id):
     return disciplines
 
 def get_grades(session, disc_id):
+    """Парсит оценки по выбранному предмету."""
     res = session.get(f"https://marks-urtk.mephi.ru/student/disciplines/{disc_id}/visits")
     soup = BeautifulSoup(res.text, 'html.parser')
     
@@ -138,6 +156,7 @@ def get_grades(session, disc_id):
     grades = []
     row = soup.find('tr', class_='table-body-row')
     if row:
+        # Пропускаем первую ячейку с ФИО и вторую со средним баллом
         cells = row.find_all('td', class_='table-date-ceil')[1:]
         for cell in cells:
             grades.append(cell.text.strip())
@@ -271,6 +290,20 @@ def callback_query(call):
 
     bot.answer_callback_query(call.id)
 
+# --- ЗАПУСК ---
 if __name__ == "__main__":
+    # Запускаем Flask-сервер в фоновом потоке (чтобы Render видел порт)
+    threading.Thread(target=run_flask, daemon=True).start()
+    
     print("Бот запущен...")
-    bot.infinity_polling()
+    # Бесконечный цикл с защитой от ошибки 409 (Conflict)
+    while True:
+        try:
+            bot.infinity_polling(timeout=10, long_polling_timeout=5)
+        except Exception as e:
+            if "409" in str(e):
+                print("Ошибка 409: запущено два экземпляра бота. Ждем 5 секунд...")
+                time.sleep(5)
+            else:
+                print(f"Неизвестная ошибка: {e}")
+                time.sleep(5)
