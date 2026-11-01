@@ -43,18 +43,15 @@ ABBR_MAP = {
 NORM_ABBR_MAP = {re.sub(r'[^а-яa-z0-9]', '', k.lower().replace('ё', 'е')): v for k, v in ABBR_MAP.items()}
 
 def get_abbr(name):
-    # Убираем все символы кроме букв и цифр
     clean_name = re.sub(r'[^а-яa-z0-9]', '', name.lower().replace('ё', 'е'))
     
     if clean_name in NORM_ABBR_MAP:
         return NORM_ABBR_MAP[clean_name]
         
     for k, v in NORM_ABBR_MAP.items():
-        # Сравниваем первые 25 символов для защиты от опечаток в конце названия
         if len(clean_name) > 20 and len(k) > 20:
             if clean_name[:25] in k or k[:25] in clean_name:
                 return v
-        # Если строки короткие, ищем вхождение целиком
         elif k in clean_name or clean_name in k:
             return v
             
@@ -286,7 +283,7 @@ def marks(message):
             btn_text = get_abbr(d['name'])
             markup.add(InlineKeyboardButton(text=btn_text, callback_data=f"disc_{d['id']}"))
 
-        bot.edit_message_text("Выберите предмет:", message.chat.id, msg.message_id, reply_markup=markup)
+        bot.edit_message_text("📚 Выберите предмет", message.chat.id, msg.message_id, reply_markup=markup)
     except Exception as e:
         bot.edit_message_text(f"❌ Произошла ошибка: {e}", message.chat.id, msg.message_id)
 
@@ -316,7 +313,7 @@ def callback_query(call):
             grades_text = get_grades(session, disc_id)
             
             markup = InlineKeyboardMarkup()
-            markup.add(InlineKeyboardButton(text="⬅️ Назад к предметам", callback_data="back_to_disciplines"))
+            markup.add(InlineKeyboardButton(text="⬅️ Назад", callback_data="back_to_disciplines"))
             
             bot.edit_message_text(grades_text, call.message.chat.id, call.message.message_id, parse_mode='HTML', reply_markup=markup)
         except Exception as e:
@@ -342,7 +339,7 @@ def callback_query(call):
                 btn_text = get_abbr(d['name'])
                 markup.add(InlineKeyboardButton(text=btn_text, callback_data=f"disc_{d['id']}"))
                 
-            bot.edit_message_text("Выберите предмет:", call.message.chat.id, call.message.message_id, reply_markup=markup)
+            bot.edit_message_text("📚 Выберите предмет", call.message.chat.id, call.message.message_id, reply_markup=markup)
         except Exception as e:
             bot.edit_message_text(f"❌ Ошибка: {e}", call.message.chat.id, call.message.message_id)
 
