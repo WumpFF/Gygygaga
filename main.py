@@ -57,6 +57,15 @@ def get_abbr(name):
             
     return name[:30] + "..." if len(name) > 30 else name
 
+# --- ХЕЛПЕРЫ ---
+
+def is_absence(mark):
+    """Распознаёт отметки о пропуске: нб, НБ, Н, Н/Б и их вариации"""
+    if not mark:
+        return False
+    norm = re.sub(r'[\s/\\]', '', mark.strip().lower())
+    return norm in {'н', 'нб'}
+
 # --- БАЗОВЫЕ ФУНКЦИИ ---
 
 def login_and_get_term(login, password):
@@ -157,7 +166,13 @@ def get_grades(session, disc_id):
             cells = row.find_all('td', class_='table-date-ceil')[1:]
             for cell in cells:
                 grades.append(cell.text.strip())
-
+        
+        # Средний балл берём из HTML, а не считаем
+        avg_grade = ""
+        avg_cell = soup.find(class_='average_grade')
+        if avg_cell:
+            avg_grade = avg_cell.text.strip()
+        
         msg = f"📚 {abbr}\n\n"
         has_grades = False
         for d, g in zip(dates, grades):
@@ -167,6 +182,9 @@ def get_grades(session, disc_id):
                 
         if not has_grades:
             msg += "Оценок пока нет"
+        elif avg_grade:
+            msg += f"\n⬝ ср. балл — {avg_grade}"
+        
         return msg
     except Exception as e:
         return f"❌ Ошибка при получении оценок: {e}"
@@ -179,7 +197,8 @@ def start(message):
         "Я — неофициальный бот электронного дневника УрТК\n\n"
         "Доступные команды:\n"
         "⬝ /login — авторизоваться\n"
-        "⬝ /marks — посмотреть оценки"
+        "⬝ /marks — посмотреть оценки\n"
+        "⬝ /gaps — посчитать пропуски"
     )
     bot.send_message(message.chat.id, text)
 
@@ -284,6 +303,63 @@ def marks(message):
             markup.add(InlineKeyboardButton(text=btn_text, callback_data=f"disc_{d['id']}"))
 
         bot.edit_message_text("📚 Выберите предмет", message.chat.id, msg.message_id, reply_markup=markup)
+    except Exception as e:
+        bot.edit_message_text(f"❌ Произошла ошибка: {e}", message.chat.id, msg.message_id)
+
+# --- КОМАНДА /gaps ---
+
+@bot.message_handler(commands=['gaps'])
+def gaps(message):
+    tg_id = message.from_user.id
+    
+    try:
+        response = supabase.table('users').select('*').eq('telegram_id', tg_id).execute()
+        if not response.data:
+            bot.send_message(message.chat.id, "Сначала авторизуйтесь с помощью команды /login")
+            return
+        user_data = response.data[0]
+        login, password = user_data['urtk_login'], user_data['urtk_password']
+    except Exception as e:
+        bot.send_message(message.chat.id, f"Ошибка базы данных: {e}")
+        return
+
+    msg = bot.send_message(message.chat.id, "⏳ Считаю пропуски...")
+    
+    try:
+        session, term_id = login_and_get_term(login, password)
+        
+        if not session:
+            bot.edit_message_text("❌ Ошибка входа\nВозможно, пароль изменился\nВведите /login заново", message.chat.id, msg.message_id)
+            return
+            
+        disciplines, err = get_disciplines(session, term_id)
+        
+        if err:
+            bot.edit_message_text(f"❌ Не удалось загрузить список\nПричина: {err}", message.chat.id, msg.message_id)
+            return
+            
+        if not disciplines:
+            bot.edit_message_text("❌ В текущем семестре нет предметов", message.chat.id, msg.message_id)
+            return
+        
+        total_gaps = 0
+        for d in disciplines:
+            try:
+                res = session.get(f"https://marks-urtk.mephi.ru/student/disciplines/{d['id']}/visits", timeout=15)
+                res.encoding = 'utf-8'
+                soup = BeautifulSoup(res.text, 'html.parser')
+                
+                row = soup.find('tr', class_='table-body-row')
+                if row:
+                    cells = row.find_all('td', class_='table-date-ceil')[1:]
+                    for cell in cells:
+                        if is_absence(cell.text.strip()):
+                            total_gaps += 1
+            except Exception:
+                continue
+        
+        hours = total_gaps * 2
+        bot.edit_message_text(f"⚠️ Пропущено: {hours} ч. ({total_gaps} пар)", message.chat.id, msg.message_id)
     except Exception as e:
         bot.edit_message_text(f"❌ Произошла ошибка: {e}", message.chat.id, msg.message_id)
 
