@@ -1,6 +1,7 @@
 import os
 import threading
 import time
+import re
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 import requests
@@ -27,7 +28,7 @@ def run_flask():
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
 
-# --- ПОЛНЫЙ СЛОВАРЬ СОКРАЩЕНИЙ ---
+# --- СЛОВАРЬ СОКРАЩЕНИЙ ---
 ABBR_MAP = {
     "архитектура аппаратных средств": "ААС", "безопасность жизнедеятельности": "БЖД", "внедрение и поддержка компьютерных систем": "ВиПКС", "графический дизайн и мультимедиа": "ГДиМ", "дискретная математика с элементами математической логики": "ДМЭМЛ", "инструментальные средства разработки программного обеспечения": "ИСРПО", "информационные технологии": "ИТ", "иностранный язык в профессиональной деятельности": "ИЯПД", "компьютерные сети": "КС", "математическое моделирование": "ММ", "основы алгоритмизации и программирования": "ОАиП", "основы бережливого производства": "ОБП", "обеспечение качества функционирования компьютерных систем": "ОКФКС", "основы проектирования баз данных": "ОПБД", "операционные системы и среды": "ОСиС", "основы философии": "ОснФилософ", "основы web-технологий": "ОТ", "проектирование и разработка веб-приложений": "ПиРП", "правовое обеспечение профессиональной деятельности": "ПОПД", "прикладное программирование": "ПП", "психология общения": "ПсихОбщения", "разработка мобильных приложений": "РМП", "разработка программных модулей": "РПМ", "системное программирование": "СП", "стандартизация, сертификация и техническое документоведение": "ССиТД", "теория вероятностей и математическая статистика": "ТВиМС", "технология разработки и защиты баз данных": "ТРиЗБД", "технология разработки программного обеспечения": "ТРПО", "учебная практика": "УП", "физическая культура": "ФизКультура", "численные методы": "ЧМ", "элементы высшей математики": "ЭВМ", "экономика отрасли": "ЭконОтрасли", 
     "иностранный язык": "ИнЯзык", "основы безопасности и защиты родины": "ОБиЗР", 
@@ -38,16 +39,22 @@ ABBR_MAP = {
     "автоматизация проектирования технологических процессов": "АПТП", "атомные электрические станции и их технологическое оборудование": "АЭСиТО", "выполнение работ по настройке и конфигурированию программируемых логических контроллеров": "ВРНиКПЛК", "гидравлические и пневматические системы": "ГиПС", "информационные и цифровые технологии в профессиональной деятельности, с применением нейронных сетей и искусственного интеллекта": "ИЦТПД НСиИИ", "математические методы моделирования производственных процессов": "МММПП", "осуществление анализа структуры технологического процесса и характеристик его элементов для разработки маршрутного технологического процесса на робототехнологическом комплексе": "ОАСТП", "осуществление комплекса пусконаладочных работ и технического обслуживания робототехнологических комплексов с формированием пакета технической документации": "ОКПРиТО", "организация работ по монтажу и наладке средства автоматизации и механизации, текущему мониторингу состояния системы": "ОРМНСА", "охрана труда и бережливое производство": "ОТиБП", "основы ядерной физики и дозиметрических измерений": "ОЯФиДИ", "планирование материально-технического обеспечения эксплуатации робототехнических комплексов": "ПМТОЭРК", "проектирование приспособлений и технологической оснастки": "ППиТО", "программирование систем с числовым программным управлением": "ПСЧПС", "процессы формообразования и инструменты": "ПФиИ", "разработка и тестирование модели системы автоматизации и механизации с формированием пакета технической документации": "РТСА", "технологическое оборудование и приспособления": "ТОиП"
 }
 
-def normalize_text(text):
-    return text.lower().replace('ё', 'е').strip().rstrip('.')
+# Предварительно нормализуем ключи словаря для надежного поиска
+NORM_ABBR_MAP = {re.sub(r'[^а-яa-z0-9]', '', k.lower().replace('ё', 'е')): v for k, v in ABBR_MAP.items()}
 
 def get_abbr(name):
-    clean_name = normalize_text(name)
-    if clean_name in ABBR_MAP:
-        return ABBR_MAP[clean_name]
-    for full_name, abbr in ABBR_MAP.items():
-        if full_name in clean_name or clean_name in full_name:
-            return abbr
+    clean_name = re.sub(r'[^а-яa-z0-9]', '', name.lower().replace('ё', 'е'))
+    
+    # 1. Точное совпадение
+    if clean_name in NORM_ABBR_MAP:
+        return NORM_ABBR_MAP[clean_name]
+        
+    # 2. Поиск по вхождению
+    for k, v in NORM_ABBR_MAP.items():
+        if k in clean_name or clean_name in k:
+            return v
+            
+    # 3. Если не нашли, обрезаем
     return name[:30] + "..." if len(name) > 30 else name
 
 # --- БАЗОВЫЕ ФУНКЦИИ ---
@@ -71,10 +78,9 @@ def login_and_get_term(login, password):
         check = session.get("https://marks-urtk.mephi.ru/student/schedule", timeout=15)
         check.encoding = 'utf-8'
         
-        # Если в ответе есть слово "Электронный дневник", значит вход успешен
         if "Электронный дневник" in check.text:
             soup_sched = BeautifulSoup(check.text, 'html.parser')
-            term_id = "5" # По умолчанию
+            term_id = "5"
             selected_span = soup_sched.find('span', class_='custom-select__selected')
             
             if selected_span:
@@ -96,7 +102,7 @@ def get_disciplines(session, term_id):
         res.encoding = 'utf-8'
         
         if "Электронный дневник" not in res.text:
-            return None, "Сессия прервалась."
+            return None, "Сессия прервалась"
             
         soup = BeautifulSoup(res.text, 'html.parser')
         disciplines = []
@@ -107,8 +113,6 @@ def get_disciplines(session, term_id):
             link_a = div.find('a', class_='link')
             if title_div and link_a:
                 name = title_div.text.strip()
-                
-                # Исключаем "Классный час" (п.6)
                 if "классный час" in name.lower() or "кл. час" in name.lower():
                     continue
                     
@@ -120,11 +124,11 @@ def get_disciplines(session, term_id):
                     continue
         
         if not disciplines:
-            return [], f"В HTML не найдены предметы (контейнеров: {len(containers)})."
+            return [], f"В HTML не найдены предметы (контейнеров: {len(containers)})"
             
         return disciplines, None
     except requests.exceptions.Timeout:
-        return None, "Таймаут при запросе предметов."
+        return None, "Таймаут при запросе предметов"
     except Exception as e:
         return None, f"Ошибка сети: {e}"
 
@@ -136,8 +140,6 @@ def get_grades(session, disc_id):
         
         title_span = soup.find('span', class_='text-bold')
         subject_name = title_span.text.strip() if title_span else "Предмет"
-        
-        # Используем сокращение для заголовка (п.1)
         abbr = get_abbr(subject_name)
         
         dates = []
@@ -156,7 +158,6 @@ def get_grades(session, disc_id):
             for cell in cells:
                 grades.append(cell.text.strip())
 
-        # Новый вид вывода (п.1)
         msg = f"📚 {abbr}\n\n"
         has_grades = False
         for d, g in zip(dates, grades):
@@ -165,7 +166,7 @@ def get_grades(session, disc_id):
                 has_grades = True
                 
         if not has_grades:
-            msg += "Оценок пока нет."
+            msg += "Оценок пока нет"
         return msg
     except Exception as e:
         return f"❌ Ошибка при получении оценок: {e}"
@@ -174,25 +175,27 @@ def get_grades(session, disc_id):
 
 @bot.message_handler(commands=['start'])
 def start(message):
-    bot.send_message(message.chat.id, "Приветствую! Я бот электронного дневника.\n\n1. Отправьте /login, чтобы авторизоваться.\n2. Отправьте /marks, чтобы просмотреть оценки.")
+    text = (
+        "Я — неофициальный бот электронного дневника УрТК\n\n"
+        "Доступные команды:\n"
+        "⬝ /login — авторизоваться\n"
+        "⬝ /marks — посмотреть оценки"
+    )
+    bot.send_message(message.chat.id, text)
 
-# --- ИЗМЕНЕННЫЙ ПРОЦЕСС ЛОГИНА (п.3, 4, 5) ---
 @bot.message_handler(commands=['login'])
 def login_start(message):
-    # Отправляем сообщение и сохраняем его ID, чтобы потом редактировать
     msg = bot.send_message(message.chat.id, "Введите ваш логин от дневника:")
     bot.register_next_step_handler(message, process_login, msg.message_id)
 
 def process_login(message, prompt_id):
     login = message.text.strip()
     
-    # Удаляем сообщение пользователя с логином
     try:
         bot.delete_message(message.chat.id, message.message_id)
     except:
         pass
         
-    # Меняем сообщение бота на запрос пароля
     try:
         bot.edit_message_text("Введите ваш пароль:", message.chat.id, prompt_id)
     except:
@@ -204,7 +207,6 @@ def process_password(message, login, prompt_id):
     password = message.text.strip()
     tg_id = message.from_user.id
     
-    # Удаляем сообщение пользователя с паролем
     try:
         bot.delete_message(message.chat.id, message.message_id)
     except:
@@ -215,17 +217,15 @@ def process_password(message, login, prompt_id):
     except:
         pass
 
-    # Проверяем логин и пароль ДО сохранения в базу (п.3)
     session, _ = login_and_get_term(login, password)
     
     if not session:
         try:
-            bot.edit_message_text("❌ Ошибка входа. \nВведен не правильный логин или пароль.", message.chat.id, prompt_id)
+            bot.edit_message_text("❌ Ошибка входа\nВведен не правильный логин или пароль", message.chat.id, prompt_id)
         except:
-            bot.send_message(message.chat.id, "❌ Ошибка входа. \nВведен не правильный логин или пароль.")
+            bot.send_message(message.chat.id, "❌ Ошибка входа\nВведен не правильный логин или пароль")
         return
 
-    # Если вход успешен, сохраняем в базу
     try:
         supabase.table('users').upsert({
             "telegram_id": tg_id, 
@@ -234,9 +234,9 @@ def process_password(message, login, prompt_id):
         }).execute()
         
         try:
-            bot.edit_message_text("✅ Аккаунт успешно привязан!\nОтправьте /marks для просмотра оценок.", message.chat.id, prompt_id)
+            bot.edit_message_text("✅ Аккаунт успешно привязан!\nОтправьте /marks для просмотра оценок", message.chat.id, prompt_id)
         except:
-            bot.send_message(message.chat.id, "✅ Аккаунт успешно привязан!\nОтправьте /marks для просмотра оценок.")
+            bot.send_message(message.chat.id, "✅ Аккаунт успешно привязан!\nОтправьте /marks для просмотра оценок")
             
     except Exception as e:
         try:
@@ -244,7 +244,6 @@ def process_password(message, login, prompt_id):
         except:
             pass
 
-# --- ПРОСМОТР ОЦЕНОК ---
 @bot.message_handler(commands=['marks'])
 def marks(message):
     tg_id = message.from_user.id
@@ -266,17 +265,17 @@ def marks(message):
         session, term_id = login_and_get_term(login, password)
         
         if not session:
-            bot.edit_message_text("❌ Ошибка входа. Возможно, пароль изменился. Введите /login заново.", message.chat.id, msg.message_id)
+            bot.edit_message_text("❌ Ошибка входа\nВозможно, пароль изменился\nВведите /login заново", message.chat.id, msg.message_id)
             return
             
         disciplines, err = get_disciplines(session, term_id)
         
         if err:
-            bot.edit_message_text(f"❌ Не удалось загрузить список.\nПричина: {err}", message.chat.id, msg.message_id)
+            bot.edit_message_text(f"❌ Не удалось загрузить список\nПричина: {err}", message.chat.id, msg.message_id)
             return
             
         if not disciplines:
-            bot.edit_message_text(f"❌ В текущем семестре нет предметов.", message.chat.id, msg.message_id)
+            bot.edit_message_text(f"❌ В текущем семестре нет предметов", message.chat.id, msg.message_id)
             return
 
         markup = InlineKeyboardMarkup()
@@ -298,7 +297,7 @@ def callback_query(call):
         user_data = response.data[0]
         login, password = user_data['urtk_login'], user_data['urtk_password']
     except Exception:
-        bot.answer_callback_query(call.id, "Ошибка данных. Авторизуйтесь через /login.")
+        bot.answer_callback_query(call.id, "Ошибка данных. Авторизуйтесь через /login")
         return
 
     if call.data.startswith('disc_'):
@@ -308,7 +307,7 @@ def callback_query(call):
         try:
             session, _ = login_and_get_term(login, password)
             if not session:
-                bot.edit_message_text("❌ Сессия истекла. Авторизуйтесь заново /login.", call.message.chat.id, call.message.message_id)
+                bot.edit_message_text("❌ Сессия истекла\nАвторизуйтесь заново /login", call.message.chat.id, call.message.message_id)
                 return
                 
             grades_text = get_grades(session, disc_id)
@@ -326,7 +325,7 @@ def callback_query(call):
         try:
             session, term_id = login_and_get_term(login, password)
             if not session:
-                bot.edit_message_text("❌ Сессия истекла. Авторизуйтесь заново /login.", call.message.chat.id, call.message.message_id)
+                bot.edit_message_text("❌ Сессия истекла\nАвторизуйтесь заново /login", call.message.chat.id, call.message.message_id)
                 return
 
             disciplines, err = get_disciplines(session, term_id)
