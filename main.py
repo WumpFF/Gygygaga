@@ -12,6 +12,26 @@ from bs4 import BeautifulSoup
 from supabase import create_client, Client
 from flask import Flask
 
+# ============================================================
+# 🔐 WHITELIST — добавляйте сюда ID через запятую
+# ============================================================
+ALLOWED_IDS = {
+    1807940916,   # ты
+    # 123456789,  # пример: друг
+    # 987654321,  # пример: второй друг
+}
+
+def is_allowed(tg_id):
+    return tg_id in ALLOWED_IDS
+
+def owner_only(func):
+    """Декоратор для message_handler: пропускает только ALLOWED_IDS"""
+    def wrapper(message, *args, **kwargs):
+        if not message.from_user or not is_allowed(message.from_user.id):
+            return  # молча игнорируем
+        return func(message, *args, **kwargs)
+    return wrapper
+
 # --- НАСТРОЙКИ ---
 TOKEN = os.environ.get("TELEGRAM_TOKEN")
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
@@ -31,7 +51,7 @@ def run_flask():
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
 
-# --- СЛОВАРЬ СОКРАЩЕНИЙ (без изменений) ---
+# --- СЛОВАРЬ СОКРАЩЕНИЙ ---
 ABBR_MAP = {
     "архитектура аппаратных средств": "ААС", "безопасность жизнедеятельности": "БЖД", "внедрение и поддержка компьютерных систем": "ВиПКС", "графический дизайн и мультимедиа": "ГДиМ", "дискретная математика с элементами математической логики": "ДМЭМЛ", "инструментальные средства разработки программного обеспечения": "ИСРПО", "информационные технологии": "ИТ", "иностранный язык в профессиональной деятельности": "ИЯПД", "компьютерные сети": "КС", "математическое моделирование": "ММ", "основы алгоритмизации и программирования": "ОАиП", "основы бережливого производства": "ОБП", "обеспечение качества функционирования компьютерных систем": "ОКФКС", "основы проектирования баз данных": "ОПБД", "операционные системы и среды": "ОСиС", "основы философии": "ОснФилософ", "основы web-технологий": "ОТ", "проектирование и разработка веб-приложений": "ПиРП", "правовое обеспечение профессиональной деятельности": "ПОПД", "прикладное программирование": "ПП", "психология общения": "ПсихОбщения", "разработка мобильных приложений": "РМП", "разработка программных модулей": "РПМ", "системное программирование": "СП", "стандартизация, сертификация и техническое документоведение": "ССиТД", "теория вероятностей и математическая статистика": "ТВиМС", "технология разработки и защиты баз данных": "ТРиЗБД", "технология разработки программного обеспечения": "ТРПО", "учебная практика": "УП", "физическая культура": "ФизКультура", "численные методы": "ЧМ", "элементы высшей математики": "ЭВМ", "экономика отрасли": "ЭконОтрасли", 
     "иностранный язык": "ИнЯзык", "основы безопасности и защиты родины": "ОБиЗР", 
@@ -62,8 +82,8 @@ def get_abbr(name):
 
 _visits_cache = OrderedDict()
 _cache_lock = threading.Lock()
-CACHE_TTL = 60           # секунд — «всегда актуально»
-CACHE_MAX_SIZE = 50      # записей — ограничение памяти на free-tier
+CACHE_TTL = 60
+CACHE_MAX_SIZE = 50
 
 def _cache_get(key):
     now = time.time()
@@ -99,7 +119,6 @@ def _check_cooldown(tg_id, command):
         _cooldowns[key] = now
     return None
 
-# --- Сессионный кэш (30 сек) — экономит время логина ---
 _session_cache = {}
 _session_lock = threading.Lock()
 SESSION_TTL = 30
@@ -125,14 +144,12 @@ def _session_drop(login):
 # ============================================================
 
 def is_absence(mark):
-    """нб, НБ, Н, Н/Б, н/б и т.п."""
     if not mark:
         return False
     norm = re.sub(r'[\s/\\]', '', mark.strip().lower())
     return norm in {'н', 'нб'}
 
 def plural_pairs(n):
-    """1 пара, 2 пары, 3 пары, 4 пары, 5 пар, 21 пара, 22 пары, 25 пар"""
     n_abs = abs(n) % 100
     if 11 <= n_abs <= 14:
         return "пар"
@@ -144,7 +161,6 @@ def plural_pairs(n):
     return "пар"
 
 def _esc(text):
-    """Экранирование под parse_mode='HTML' (защита от 'can't parse entities')"""
     return str(text).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
 # ============================================================
@@ -224,13 +240,12 @@ def get_disciplines(session, term_id):
         return None, f"Ошибка сети: {e}"
 
 # ============================================================
-# ЗАГРУЗКА VISITS: параллельно + кэш + ретрай
+# ЗАГРУЗКА VISITS
 # ============================================================
 
 _UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
 
 def _fetch_one(cookies, disc_id):
-    """Одна страница. Возвращает (disc_id, html|None). Ретрай 1 раз."""
     s = requests.Session()
     s.cookies.update(cookies)
     s.headers.update({'User-Agent': _UA})
@@ -240,7 +255,7 @@ def _fetch_one(cookies, disc_id):
             res = s.get(url, timeout=15)
             res.encoding = 'utf-8'
             if 'marks-urtk.mephi.ru' not in res.url:
-                return disc_id, None  # редирект на auth = сессия истекла
+                return disc_id, None
             if res.status_code == 200:
                 return disc_id, res.text
         except Exception:
@@ -282,7 +297,7 @@ def fetch_visits_one(session, login, term_id, disc_id):
     return html
 
 # ============================================================
-# ОЦЕНКИ ПРЕДМЕТА (+ средний балл из HTML)
+# ОЦЕНКИ ПРЕДМЕТА
 # ============================================================
 
 def get_grades(session, login, term_id, disc_id):
@@ -338,9 +353,10 @@ def get_grades(session, login, term_id, disc_id):
 # ============================================================
 
 @bot.message_handler(commands=['start'])
+@owner_only
 def start(message):
     text = (
-        "Я — неофициальный бот электронного дневника УрТК\n\n"
+        "Я — неофициальный бот электронного дневника УрТК НИЯУ МИФИ\n\n"
         "Доступные команды:\n"
         "⬝ /login — авторизоваться\n"
         "⬝ /marks — посмотреть оценки\n"
@@ -349,11 +365,15 @@ def start(message):
     bot.send_message(message.chat.id, text)
 
 @bot.message_handler(commands=['login'])
+@owner_only
 def login_start(message):
     msg = bot.send_message(message.chat.id, "Введите ваш логин от дневника:")
     bot.register_next_step_handler(message, process_login, msg.message_id)
 
 def process_login(message, prompt_id):
+    # защита на случай, если кто-то пролез через register_next_step_handler
+    if not message.from_user or not is_allowed(message.from_user.id):
+        return
     login = message.text.strip()
     try:
         bot.delete_message(message.chat.id, message.message_id)
@@ -366,6 +386,8 @@ def process_login(message, prompt_id):
     bot.register_next_step_handler(message, process_password, login, prompt_id)
 
 def process_password(message, login, prompt_id):
+    if not message.from_user or not is_allowed(message.from_user.id):
+        return
     password = message.text.strip()
     tg_id = message.from_user.id
     try:
@@ -385,7 +407,6 @@ def process_password(message, login, prompt_id):
             bot.send_message(message.chat.id, "❌ Ошибка входа\nВведен не правильный логин или пароль")
         return
 
-    # сбрасываем возможный старый кэш сессии по этому логину
     _session_drop(login)
 
     try:
@@ -405,6 +426,7 @@ def process_password(message, login, prompt_id):
             pass
 
 @bot.message_handler(commands=['marks'])
+@owner_only
 def marks(message):
     tg_id = message.from_user.id
 
@@ -458,11 +480,8 @@ def marks(message):
     except Exception as e:
         bot.edit_message_text(f"❌ Произошла ошибка: {e}", message.chat.id, msg.message_id)
 
-# ============================================================
-# /gaps — пропуски
-# ============================================================
-
 @bot.message_handler(commands=['gaps'])
+@owner_only
 def gaps(message):
     tg_id = message.from_user.id
 
@@ -511,7 +530,6 @@ def gaps(message):
         disc_ids = [d['id'] for d in disciplines]
         pages = fetch_visits_parallel(session, login, term_id, disc_ids)
 
-        # Если ВСЕ страницы вернулись None — скорее всего сессия протухла
         if pages and all(v is None for v in pages.values()):
             _session_drop(login)
             session, term_id = login_and_get_term(login, password)
@@ -549,6 +567,11 @@ def gaps(message):
 
 @bot.callback_query_handler(func=lambda call: True)
 def callback_query(call):
+    # защита: чужие нажатия игнорируем
+    if not call.from_user or not is_allowed(call.from_user.id):
+        bot.answer_callback_query(call.id)
+        return
+
     tg_id = call.from_user.id
     try:
         response = supabase.table('users').select('*').eq('telegram_id', tg_id).execute()
